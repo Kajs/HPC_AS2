@@ -59,14 +59,48 @@ void jacobi(int N, struct twoPointers mydata) {
 
     for(r = 1; r < N-1; r++) {
       for(c = 1; c < N-1; c++) {
-        mydata.pointers[new][r][c] = mydata.pointers[old][r][c-1];
-        mydata.pointers[new][r][c] += mydata.pointers[old][r][c+1];
-        mydata.pointers[new][r][c] += mydata.pointers[old][r-1][c];
-        mydata.pointers[new][r][c] += mydata.pointers[old][r+1][c];
+        double val;
+        val = mydata.pointers[old][r-1][c];
+        val += mydata.pointers[old][r+1][c];
+        val += mydata.pointers[old][r][c-1];
+        val += mydata.pointers[old][r][c+1];
         double x = r * 2.0/((double) (N-1)) - 1;
         double y = c * 2.0/((double) (N-1)) - 1;
-        mydata.pointers[new][r][c] += pow(spacing, 2)*f(x, y);
-        mydata.pointers[new][r][c] = mydata.pointers[new][r][c] * 0.25;
+        val += pow(spacing, 2)*f(x, y);
+        mydata.pointers[new][r][c] = val * 0.25;
+      }
+    }
+  }
+  //printMatrix(N, matrix);
+  writeMatrix(N, mydata);
+}
+
+void seidel(int N, struct twoPointers mydata) {
+  double spacing = 2.0/((double) N);
+  int i, r, c;
+  int new = mydata.using;
+  int old;
+  int loops = N * log(N)/log(2) + 1;
+  printf("spacing=%lf\n", spacing);
+
+  for (i = 0; i < loops; i++) {
+    old = mydata.using;
+    if (new == 0) { mydata.using = 1; }
+    else { mydata.using = 0; }
+    new = mydata.using;
+
+    for(r = 1; r < N-1; r++) {
+      for(c = 1; c < N-1; c++) {
+        double val;
+        val = mydata.pointers[new][r-1][c];
+        val += mydata.pointers[old][r+1][c];
+        val += mydata.pointers[new][r][c-1];
+        val += mydata.pointers[old][r][c+1];
+        
+        double x = r * 2.0/((double) (N-1)) - 1;
+        double y = c * 2.0/((double) (N-1)) - 1;
+        val += pow(spacing, 2)*f(x, y);
+        mydata.pointers[new][r][c] = val * 0.25;
       }
     }
   }
@@ -140,7 +174,7 @@ int main(int argc, char *argv[]) {
   }
 
   //Initialization Inner
-  double initialGuess = -10.0;
+  double initialGuess = 5.0;
   for(r = 1; r < N-1; r++) {
     for(c = 1; c < N-1; c++) {
       matrix[r][c] = initialGuess;
