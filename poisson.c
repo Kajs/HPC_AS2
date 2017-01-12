@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <sys/time.h>
+#include <string.h>
 struct twoPointers {
   double** pointers[2];
   int using;
@@ -49,7 +50,7 @@ void jacobi(int N, struct twoPointers mydata) {
   int new = mydata.using;
   int old;
   int loops = N * log(N)/log(2) + 1;
-  printf("spacing=%lf\n", spacing);
+  printf("jac: spacing=%lf\n", spacing);
 
   for (i = 0; i < loops; i++) {
     old = mydata.using;
@@ -81,7 +82,7 @@ void seidel(int N, struct twoPointers mydata) {
   int new = mydata.using;
   int old;
   int loops = N * log(N)/log(2) + 1;
-  printf("spacing=%lf\n", spacing);
+  printf("sei: spacing=%lf\n", spacing);
 
   for (i = 0; i < loops; i++) {
     old = mydata.using;
@@ -118,9 +119,9 @@ int main(int argc, char *argv[]) {
   if(argc >= 2) { N = atoi(argv[1]); }
   printf("N=%i\n", N);
 
-  int loops = 3;
-  if(argc >= 3) { loops = atoi(argv[2]); }
-  printf("loops=%i\n", loops);
+  char* funcname = "jac";
+  if(argc >= 3) { funcname = argv[2]; }
+  printf("using function %s\n", funcname);
 
   struct twoPointers mydata;
   mydata.using = 0;
@@ -181,7 +182,8 @@ int main(int argc, char *argv[]) {
     }
   }
   printf("main: running jacobi\n");
-  jacobi(N, mydata);
+  if(strcmp(funcname, "jac") == 0) { jacobi(N, mydata); }
+  else{ if(strcmp(funcname, "sei") == 0) { seidel(N, mydata); } }
   for(i = 0; i < N; i++) {
     free(matrix[i]);
     free(matrix2[i]);
