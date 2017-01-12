@@ -7,7 +7,6 @@
 struct twoPointers {
   double** pointers[2];
   int using;
-  double comparison[2];
 };
 
 
@@ -46,27 +45,31 @@ void writeMatrix(int N, struct twoPointers mydata) {
   fclose(fpout);
 }
 
-int jacobi(int N, struct twoPointers mydata) {
+int jacobi(int N, struct twoPointers mydata, int nthreads) {
   double spacing = 2.0/((double) N);
-  int i, r, c;
+  int i, r, c, t;
   int new = mydata.using;
   int old;
   int loops = N * N * log(N);
-  double epsilon = 0.01;
+  double epsilon = 0.0001;
+  double comparison[nthreads];
   //printf("jac: spacing=%lf\n", spacing);
+  
 
   for (i = 0; i < loops; i++) {
     old = mydata.using;
     if (new == 0) { mydata.using = 1; }
     else { mydata.using = 0; }
     new = mydata.using;
-    mydata.comparison[new] = 0;
+    
+    for(t=0; t < nthreads; t++) { comparison[t] = 0; }
 
     #pragma omp parallel for private(r) private(c)
     for(r = 1; r < N-1; r++) {
       /* TESTING */
       //if(i==0) { printf("thread %i, r=%i\n", omp_get_thread_num(), r); }
       /* ___TESTING */
+      int threadId = omp_get_thread_num();
       for(c = 1; c < N-1; c++) {
         double val;
         val = mydata.pointers[old][r-1][c];
@@ -77,12 +80,18 @@ int jacobi(int N, struct twoPointers mydata) {
         double y = c * 2.0/((double) (N-1)) - 1;
         val += spacing*spacing*f(x, y);
         mydata.pointers[new][r][c] = val * 0.25;
-        mydata.comparison[new] += val*0.25;
+        double delta = mydata.pointers[new][r][c] - mydata.pointers[old][r][c];
+        comparison[threadId] += delta*delta;
       }
     }
-    double delta = mydata.comparison[new] - mydata.comparison[old];
     //printf("delta=%lf, delta^2=%lf\n", delta, delta*delta);
-    if(i > 0 && delta*delta < epsilon) { return i; }
+    double combinedComparison = 0;
+    for(t = 0; t < nthreads; t++) { combinedComparison += comparison[t]; }
+    if(i > 0 && combinedComparison < epsilon) { 
+      printf("jac:too small difference: combinedComparison = %lf, i=%i\n", combinedComparison, i);
+      writeMatrix(N, mydata);
+      return i; 
+    }
   }
   //printMatrix(N, matrix);
   writeMatrix(N, mydata);
@@ -201,7 +210,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if(strcmp(funcname, "jac") == 0) { completedLoops = jacobi(N, mydata); }
+  if(strcmp(funcname, "jac") == 0) { completedLoops = jacobi(N, mydata, nthreads); }
   else{ if(strcmp(funcname, "sei") == 0) { seidel(N, mydata); } }
   for(i = 0; i < N; i++) {
     free(matrix[i]);
