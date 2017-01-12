@@ -3,9 +3,11 @@
 #include <math.h>
 #include <sys/time.h>
 #include <string.h>
+#include <omp.h>
 struct twoPointers {
   double** pointers[2];
   int using;
+  double comparison[2];
 };
 
 
@@ -44,21 +46,27 @@ void writeMatrix(int N, struct twoPointers mydata) {
   fclose(fpout);
 }
 
-void jacobi(int N, struct twoPointers mydata) {
+int jacobi(int N, struct twoPointers mydata) {
   double spacing = 2.0/((double) N);
   int i, r, c;
   int new = mydata.using;
   int old;
-  int loops = N * log(N)/log(2) + 1;
-  printf("jac: spacing=%lf\n", spacing);
+  int loops = N * N * log(N);
+  double epsilon = 0.01;
+  //printf("jac: spacing=%lf\n", spacing);
 
   for (i = 0; i < loops; i++) {
     old = mydata.using;
     if (new == 0) { mydata.using = 1; }
     else { mydata.using = 0; }
     new = mydata.using;
+    mydata.comparison[new] = 0;
 
+    #pragma omp parallel for private(r) private(c)
     for(r = 1; r < N-1; r++) {
+      /* TESTING */
+      //if(i==0) { printf("thread %i, r=%i\n", omp_get_thread_num(), r); }
+      /* ___TESTING */
       for(c = 1; c < N-1; c++) {
         double val;
         val = mydata.pointers[old][r-1][c];
@@ -67,13 +75,18 @@ void jacobi(int N, struct twoPointers mydata) {
         val += mydata.pointers[old][r][c+1];
         double x = r * 2.0/((double) (N-1)) - 1;
         double y = c * 2.0/((double) (N-1)) - 1;
-        val += pow(spacing, 2)*f(x, y);
+        val += spacing*spacing*f(x, y);
         mydata.pointers[new][r][c] = val * 0.25;
+        mydata.comparison[new] += val*0.25;
       }
     }
+    double delta = mydata.comparison[new] - mydata.comparison[old];
+    //printf("delta=%lf, delta^2=%lf\n", delta, delta*delta);
+    if(i > 0 && delta*delta < epsilon) { return i; }
   }
   //printMatrix(N, matrix);
   writeMatrix(N, mydata);
+  return loops;
 }
 
 void seidel(int N, struct twoPointers mydata) {
@@ -82,7 +95,7 @@ void seidel(int N, struct twoPointers mydata) {
   int new = mydata.using;
   int old;
   int loops = N * log(N)/log(2) + 1;
-  printf("sei: spacing=%lf\n", spacing);
+  //printf("sei: spacing=%lf\n", spacing);
 
   for (i = 0; i < loops; i++) {
     old = mydata.using;
@@ -100,7 +113,7 @@ void seidel(int N, struct twoPointers mydata) {
         
         double x = r * 2.0/((double) (N-1)) - 1;
         double y = c * 2.0/((double) (N-1)) - 1;
-        val += pow(spacing, 2)*f(x, y);
+        val += spacing*spacing*f(x, y);
         mydata.pointers[new][r][c] = val * 0.25;
       }
     }
@@ -116,12 +129,18 @@ int main(int argc, char *argv[]) {
 
   int N = 3;
   int i;
+  int nthreads;
+  int completedLoops = -1;
+  #pragma omp parallel
+  {
+    if(omp_get_thread_num()==0) { nthreads = omp_get_num_threads(); }
+  } //end parallel
   if(argc >= 2) { N = atoi(argv[1]); }
-  printf("N=%i\n", N);
+  //printf("N=%i\n", N);
 
   char* funcname = "jac";
   if(argc >= 3) { funcname = argv[2]; }
-  printf("using function %s\n", funcname);
+  //printf("using function %s\n", funcname);
 
   struct twoPointers mydata;
   mydata.using = 0;
@@ -181,8 +200,8 @@ int main(int argc, char *argv[]) {
       matrix[r][c] = initialGuess;
     }
   }
-  printf("main: running jacobi\n");
-  if(strcmp(funcname, "jac") == 0) { jacobi(N, mydata); }
+
+  if(strcmp(funcname, "jac") == 0) { completedLoops = jacobi(N, mydata); }
   else{ if(strcmp(funcname, "sei") == 0) { seidel(N, mydata); } }
   for(i = 0; i < N; i++) {
     free(matrix[i]);
@@ -193,6 +212,6 @@ int main(int argc, char *argv[]) {
 
   gettimeofday(&t2, NULL);
   elapsedTime = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec)/1000000.0;
-  printf("%lfs\n", elapsedTime);
+  printf("%i %lf %i %s %i\n", nthreads, elapsedTime, N, funcname, completedLoops);
   return 0;
 }
