@@ -1,5 +1,5 @@
 CC     = cc
-OPT    = -g -O3
+OPT    = -g -O3 -lm
 WARN   =
 CFLAGS = $(OPT) $(WARN)
 OBJECTS = poisson.o

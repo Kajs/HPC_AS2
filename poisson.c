@@ -1,14 +1,22 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+#include <sys/time.h>
 struct twoPointers {
   double** pointers[2];
   int using;
 };
 
+
+double f(double x, double y) {
+  if(x >= 0 && x <= 1.0/3.0 && y >= -2.0/3.0 && y <= -1.0/3.0) { return 200.0; }
+  return 0.0;
+}
+
 void printMatrix(int N, double** matrix) {
   int r, c;
-  for(c = 0; c < N; c++) {
-    for(r = 0; r < N; r++) {
+  for(r = 0; r < N; r++) {
+    for(c = 0; c < N; c++) {
       printf("%lf ", matrix[r][c]);
     }
     printf("\n\n");
@@ -25,8 +33,8 @@ void writeMatrix(int N, struct twoPointers mydata) {
 
   int r, c;
   fprintf(fpout, "#x y z\n");
-  for(c = 0; c < N; c++) {
-    for(r = 0; r < N; r++) {
+  for(r = 0; r < N; r++) {
+    for(c = 0; c < N; c++) {
       double x = r * 2.0/((double) (N-1)) - 1;
       double y = c * 2.0/((double) (N-1)) - 1;
       fprintf(fpout, "%lf %lf %lf\n", x, y, mydata.pointers[mydata.using][r][c]);
@@ -35,15 +43,42 @@ void writeMatrix(int N, struct twoPointers mydata) {
   fclose(fpout);
 }
 
-void jacobi(int N, int loops, struct twoPointers mydata) {
+void jacobi(int N, struct twoPointers mydata) {
   double spacing = 2.0/((double) N);
+  int i, r, c;
+  int new = mydata.using;
+  int old;
+  int loops = N * log(N)/log(2) + 1;
   printf("spacing=%lf\n", spacing);
 
+  for (i = 0; i < loops; i++) {
+    old = mydata.using;
+    if (new == 0) { mydata.using = 1; }
+    else { mydata.using = 0; }
+    new = mydata.using;
+
+    for(r = 1; r < N-1; r++) {
+      for(c = 1; c < N-1; c++) {
+        mydata.pointers[new][r][c] = mydata.pointers[old][r][c-1];
+        mydata.pointers[new][r][c] += mydata.pointers[old][r][c+1];
+        mydata.pointers[new][r][c] += mydata.pointers[old][r-1][c];
+        mydata.pointers[new][r][c] += mydata.pointers[old][r+1][c];
+        double x = r * 2.0/((double) (N-1)) - 1;
+        double y = c * 2.0/((double) (N-1)) - 1;
+        mydata.pointers[new][r][c] += pow(spacing, 2)*f(x, y);
+        mydata.pointers[new][r][c] = mydata.pointers[new][r][c] * 0.25;
+      }
+    }
+  }
   //printMatrix(N, matrix);
   writeMatrix(N, mydata);
 }
 
 int main(int argc, char *argv[]) {
+  struct timeval t1, t2;
+  double elapsedTime;
+  gettimeofday(&t1, NULL);
+
   int N = 3;
   int i;
   if(argc >= 2) { N = atoi(argv[1]); }
@@ -86,16 +121,22 @@ int main(int argc, char *argv[]) {
   mydata.pointers[1] = matrix2;
   mydata.using = 0;
 
+  double hotWall = 20.0;
+  double coldWall = 0.0;
   //Initialization Outer
   int r,c;
   for(c = 0; c < N; c++) {
-    matrix[0][c] = 20.0;
-    matrix[N-1][c] = 20.0;
+    matrix[0][c] = hotWall;
+    matrix[N-1][c] = hotWall;
+    matrix2[0][c] = hotWall;
+    matrix2[N-1][c] = hotWall;
   }
 
   for(r = 0; r < N; r++) {
-    matrix[r][0] = 0.0;
-    matrix[r][N-1] = 20.0;
+    matrix[r][0] = coldWall;
+    matrix[r][N-1] = hotWall;
+    matrix2[r][0] = coldWall;
+    matrix2[r][N-1] = hotWall;
   }
 
   //Initialization Inner
@@ -106,12 +147,16 @@ int main(int argc, char *argv[]) {
     }
   }
   printf("main: running jacobi\n");
-  jacobi(N, loops, mydata);
+  jacobi(N, mydata);
   for(i = 0; i < N; i++) {
     free(matrix[i]);
     free(matrix2[i]);
   }
   free(matrix);
   free(matrix2);
+
+  gettimeofday(&t2, NULL);
+  elapsedTime = (t2.tv_sec - t1.tv_sec) + (t2.tv_usec - t1.tv_usec)/1000000.0;
+  printf("%lfs\n", elapsedTime);
   return 0;
 }
