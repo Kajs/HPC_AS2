@@ -1,5 +1,5 @@
-CC     = cc
-OPT    = -g -O3 -lm
+CC     = suncc
+OPT    = -g -fast -lm -xopenmp
 WARN   =
 CFLAGS = $(OPT) $(WARN)
 OBJECTS = poisson.o
